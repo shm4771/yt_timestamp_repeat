@@ -8,8 +8,6 @@ uiContainer.style.padding = '10px';
 uiContainer.style.border = '1px solid black';
 uiContainer.style.zIndex = '10000';
 uiContainer.style.cursor = 'move'; // Cursor indicates movability
-
-// Initial styles for collapsed state
 uiContainer.style.width = '100px'; // Smaller width when collapsed
 uiContainer.style.height = '50px'; // Smaller height when collapsed
 
@@ -25,7 +23,7 @@ contentDiv.innerHTML = `
   <button id="setEnd">Set End Timestamp</button>
   <button id="play">Play</button>
   <button id="repeat">Repeat</button>
-  <button id="clearTimestamps">Clear Timestamps</button>
+  <button id="clearTimestamps">Clear</button>
   <p id="startTimestamp">Start: Not set</p>
   <p id="endTimestamp">End: Not set</p>
 `;
@@ -43,12 +41,14 @@ toggleButton.onclick = function () {
         contentDiv.style.display = 'none';
         toggleButton.innerText = 'Expand';
         uiContainer.style.width = '100px'; // Collapsed width
-        uiContainer.style.height = 'auto'; // Collapsed height
+        uiContainer.style.height = '50px'; // Collapsed height
     }
 };
 
+dragElement(uiContainer);
+
 function dragElement(elmnt) {
-    var pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+    let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
     elmnt.onmousedown = dragMouseDown;
 
     function dragMouseDown(e) {
@@ -75,95 +75,65 @@ function dragElement(elmnt) {
     }
 }
 
-dragElement(uiContainer);
+let startTimestamp = null;
+let endTimestamp = null;
 
-// Event listeners and functions related to timestamp and video control
 document.getElementById('setStart').addEventListener('click', () => {
-    setTimestamp('setStartTimestamp');
+    setTimestamp('start');
 });
 
 document.getElementById('setEnd').addEventListener('click', () => {
-    setTimestamp('setEndTimestamp');
+    setTimestamp('end');
 });
 
 document.getElementById('play').addEventListener('click', () => {
-    playOrRepeatVideo('playVideo');
+    playVideo();
 });
 
 document.getElementById('repeat').addEventListener('click', () => {
-    playOrRepeatVideo('repeatVideo');
+    repeatVideo();
 });
 
 document.getElementById('clearTimestamps').addEventListener('click', () => {
+    clearTimestamps();
+});
+
+function setTimestamp(type) {
+    const video = document.querySelector('video');
+    const timestamp = video.currentTime;
+    if (type === 'start') {
+        startTimestamp = timestamp;
+        document.getElementById('startTimestamp').innerText = `Start: ${timestamp.toFixed(2)}s`;
+    } else {
+        endTimestamp = timestamp;
+        document.getElementById('endTimestamp').innerText = `End: ${timestamp.toFixed(2)}s`;
+    }
+}
+
+function playVideo() {
+    const video = document.querySelector('video');
+    video.currentTime = startTimestamp || 0;
+    video.play();
+}
+
+function repeatVideo() {
+    const video = document.querySelector('video');
+    playVideo();
+    video.onended = () => {
+        if (video.currentTime >= (endTimestamp || video.duration)) {
+            video.currentTime = startTimestamp || 0;
+            video.play();
+        }
+    };
+}
+
+function clearTimestamps() {
+    const video = document.querySelector('video');
     startTimestamp = null;
     endTimestamp = null;
     document.getElementById('startTimestamp').innerText = "Start: Not set";
     document.getElementById('endTimestamp').innerText = "End: Not set";
-    chrome.storage.local.set({ startTimestamp: null, endTimestamp: null });
-});
-
-function setTimestamp(action) {
-    const video = document.querySelector('video');
-    if (!video) {
-        alert("No video found!");
-        return;
-    }
-    const timestamp = video.currentTime;
-    if (action === 'setStartTimestamp') {
-        startTimestamp = timestamp;
-        document.getElementById('startTimestamp').innerText = `Start: ${timestamp.toFixed(2)}s`;
-        chrome.storage.local.set({ startTimestamp: timestamp });
-    } else if (action === 'setEndTimestamp') {
-        endTimestamp = timestamp;
-        document.getElementById('endTimestamp').innerText = `End: ${timestamp.toFixed(2)}s`;
-        chrome.storage.local.set({ endTimestamp: timestamp });
-    }
-}
-
-function playOrRepeatVideo(action) {
-    const video = document.querySelector('video');
-    if (!video) {
-        alert("No video found!");
-        return;
-    }
-    if (startTimestamp !== null && endTimestamp !== null) {
-        if (action === 'playVideo') {
-            playVideo(startTimestamp, endTimestamp, video);
-        } else {
-            repeatVideo(startTimestamp, endTimestamp, video);
-        }
-    } else {
-        alert('Please set both start and end timestamps.');
-    }
-}
-
-function playVideo(start, end, video) {
-    video.currentTime = start;
-    video.play();
-    const stopVideo = () => {
-        if (video.currentTime >= end) {
-            video.pause();
-            video.removeEventListener('timeupdate', stopVideo);
-        }
-    };
-    video.addEventListener('timeupdate', stopVideo);
-}
-
-function repeatVideo(start, end, video) {
-    if (start === null || end === null || start >= end) {
-        alert('Invalid start or end timestamps.');
-        return;
-    }
-
-    video.currentTime = start;
-    video.play();
-
-    const loopVideo = () => {
-        if (video.currentTime >= end) {
-            video.currentTime = start;
-            video.play(); // Ensure the video plays again after resetting time
-        }
-    };
-
-    video.addEventListener('timeupdate', loopVideo);
+    video.onended = null; // Remove the onended event handler
+    video.pause(); // Pause the video
+    video.currentTime = 0; // Reset the video current time
 }
